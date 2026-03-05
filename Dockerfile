@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# ── System deps for SeleniumBase + headless Chrome ───────────────────────
+# ── System deps + Google Chrome stable ───────────────────────────────────
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     xdg-utils \
     --no-install-recommends && \
+    # Install Google Chrome stable from official repo
+    wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+    apt-get install -y /tmp/chrome.deb && \
+    rm /tmp/chrome.deb && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -35,13 +39,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download ChromeDriver for SeleniumBase
+# Pre-download matching ChromeDriver for SeleniumBase
 RUN seleniumbase install chromedriver
-RUN seleniumbase install chrome
 
 COPY . .
 
 EXPOSE 8080
 
-# Run the Flask API server
 CMD ["python", "app.py"]
