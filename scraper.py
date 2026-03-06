@@ -434,7 +434,6 @@ class GlassdoorScraper:
             "uc": True,
             "test": True,
             "headless2": self.headless,
-            "locale": "en",
         }
         if self.proxy:
             sb_kwargs["proxy"] = self.proxy
