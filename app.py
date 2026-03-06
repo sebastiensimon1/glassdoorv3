@@ -6,6 +6,7 @@ from flask_cors import CORS
 import os
 import time
 import dataclasses
+import enum
 from datetime import datetime
 
 from scraper import GlassdoorScraper, save_jobs_to_csv
@@ -19,6 +20,27 @@ if not SCRAPER_API_KEY:
 
 
 # ---------------------------------------------------------------------------
+# Serialization helper — handles enums + nested dataclasses
+# ---------------------------------------------------------------------------
+
+def job_to_dict(obj):
+    """
+    Recursively convert a dataclass (and any nested dataclasses/enums) to
+    a plain JSON-safe dict.  dataclasses.asdict() fails on Enum values so
+    we walk the tree ourselves.
+    """
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return {k: job_to_dict(v) for k, v in dataclasses.asdict(obj).items()}
+    if isinstance(obj, enum.Enum):
+        return obj.value
+    if isinstance(obj, list):
+        return [job_to_dict(i) for i in obj]
+    if isinstance(obj, dict):
+        return {k: job_to_dict(v) for k, v in obj.items()}
+    return obj
+
+
+# ---------------------------------------------------------------------------
 # Health / info routes
 # ---------------------------------------------------------------------------
 
@@ -27,7 +49,7 @@ def home():
     return jsonify({
         "status": "online",
         "service": "GlassdoorV3 Scraper API",
-        "version": "3.0.0 (SeleniumBase CDP + Multithreaded)",
+        "version": "3.0.1 (SeleniumBase CDP + Multithreaded)",
         "description": "Scrapes Glassdoor jobs via SeleniumBase UC/CDP bot bypass",
     })
 
@@ -49,14 +71,14 @@ def scrape():
         if api_key != SCRAPER_API_KEY:
             return jsonify({"success": False, "error": "Invalid API key"}), 401
 
-        data = request.json or {}
-        search_term       = data.get("keyword", "").strip()
-        results_wanted    = min(int(data.get("results", 20)), 200)
-        is_remote         = bool(data.get("remote_only", False))
-        easy_apply        = bool(data.get("easy_apply", False))
-        fetch_desc        = bool(data.get("fetch_descriptions", True))
-        desc_workers      = min(int(data.get("threads", 8)), 15)
-        hours_old         = data.get("hours_old")
+        data         = request.json or {}
+        search_term  = data.get("keyword", "").strip()
+        results_wanted = min(int(data.get("results", 20)), 200)
+        is_remote    = bool(data.get("remote_only", False))
+        easy_apply   = bool(data.get("easy_apply", False))
+        fetch_desc   = bool(data.get("fetch_descriptions", True))
+        desc_workers = min(int(data.get("threads", 8)), 15)
+        hours_old    = data.get("hours_old")
         if hours_old is not None:
             hours_old = int(hours_old)
 
@@ -68,7 +90,7 @@ def scrape():
 
         scraper = GlassdoorScraper(headless=True, description_workers=desc_workers)
 
-        start = time.time()
+        start    = time.time()
         raw_jobs = scraper.scrape(
             search_term=search_term,
             location="",
@@ -80,8 +102,8 @@ def scrape():
         )
         elapsed = round(time.time() - start, 2)
 
-        # Serialize dataclass objects to plain dicts
-        jobs = [dataclasses.asdict(j) for j in raw_jobs]
+        # Safely serialize dataclasses + enums to plain dicts
+        jobs = [job_to_dict(j) for j in raw_jobs]
 
         return jsonify({
             "success": True,
