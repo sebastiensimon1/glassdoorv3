@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     unzip \
     xvfb \
+    xauth \
+    python3-tk \
+    python3-dev \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \

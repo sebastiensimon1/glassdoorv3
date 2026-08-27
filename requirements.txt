@@ -1,4 +1,8 @@
-seleniumbase==4.29.0
+seleniumbase>=4.34.0
 flask==3.0.3
 flask-cors==4.0.1
-requests==2.31.0
+requests==2.32.3
+# UC Mode on Linux imports pyautogui; the PyPI python3-Xlib 0.15 it pulls has
+# an auth-parsing bug ("expected 5, got 4"). python-xlib 0.33 fixes it.
+pyautogui==0.9.54
+python-xlib==0.33

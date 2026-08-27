@@ -432,8 +432,10 @@ class GlassdoorScraper:
     def _init_browser_session(self):
         sb_kwargs = {
             "uc": True,
-            "test": True,
-            "headless2": self.headless,
+            # headless2 + CDP mode needs no virtual display (avoids the
+            # pyautogui/Xlib import bug on this image). The browser is only
+            # used briefly to harvest cookies + CSRF token.
+            "headless2": True,
         }
         if self.proxy:
             sb_kwargs["proxy"] = self.proxy
@@ -443,16 +445,24 @@ class GlassdoorScraper:
         with SB(**sb_kwargs) as sb:
             url = f"{self.BASE_URL}/Job/computer-science-jobs.htm"
             sb.activate_cdp_mode(url)
-            sb.sleep(3)
+            sb.sleep(6)
 
             try:
                 sb.solve_captcha()
             except Exception:
                 pass
 
-            sb.sleep(2)
+            sb.sleep(3)
+
+            # Log what actually loaded (CF challenge vs real page)
+            try:
+                page_title = sb.get_title()
+                log.info(f"Browser session page title: {page_title!r}")
+            except Exception:
+                log.warning("Could not read page title.")
 
             page_source = sb.get_page_source()
+            log.info(f"Page source length: {len(page_source)}")
             token_match = re.findall(r'"token":\s*"([^"]+)"', page_source)
             if token_match:
                 self.csrf_token = token_match[0]
@@ -461,13 +471,20 @@ class GlassdoorScraper:
                 self.csrf_token = FALLBACK_TOKEN
                 log.warning("Using fallback CSRF token.")
 
+            # CDP mode: sb.driver.get_cookies() doesn't work — use sb.get_cookies()
             try:
-                all_cookies = sb.driver.get_cookies()
+                all_cookies = sb.get_cookies()
                 self.cookies = {c["name"]: c["value"] for c in all_cookies}
                 log.info(f"Captured {len(self.cookies)} cookies from browser session.")
-            except Exception:
-                self.cookies = {}
-                log.warning("Could not extract cookies from browser.")
+            except Exception as e:
+                log.warning(f"sb.get_cookies() failed ({e}); trying driver...")
+                try:
+                    all_cookies = sb.driver.get_cookies()
+                    self.cookies = {c["name"]: c["value"] for c in all_cookies}
+                    log.info(f"Captured {len(self.cookies)} cookies from browser session.")
+                except Exception:
+                    self.cookies = {}
+                    log.warning("Could not extract cookies from browser.")
 
     def _make_api_request(self, payload: str) -> dict:
         import requests
